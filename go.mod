@@ -3,6 +3,7 @@ module go-ido-bot
 go 1.14
 
 require (
+	fyne.io/fyne v1.4.3
 	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
 	github.com/ethereum/go-ethereum v1.10.6

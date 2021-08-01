@@ -19,8 +19,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/lxn/walk"
-	. "github.com/lxn/walk/declarative"
+	"fyne.io/fyne"
+	"fyne.io/fyne/app"
+	"fyne.io/fyne/widget"
 )
 
 var ZERO_ADDRESS = common.HexToAddress("0x0000000000000000000000000000000000000000")
@@ -63,47 +64,68 @@ func inputHandler() string {
 	return input
 }
 
-func (bot *Bot) getPairAddr() common.Address {
+func (bot *Bot) getPairAddr() (common.Address, error) {
 	factory, err := factory.NewFactory(bot.factoryAddr, bot.client)
 	if err != nil {
-		log.Fatal("cannot init router contract")
+		return common.HexToAddress("0x"), err
 	}
 
 	pairAddr, err := factory.GetPair(&bind.CallOpts{}, bot.inTokenAddr, bot.outTokenAddr)
 	if err != nil {
-		log.Fatal(err.Error())
+		return common.HexToAddress("0x"), err
 	}
 
-	return pairAddr
+	return pairAddr, nil
 }
 
-func (bot *Bot) getDecimal(tokenAddr common.Address) uint8 {
+func (bot *Bot) getDecimal(tokenAddr common.Address) (uint8, error) {
 	token, err := erc20.NewErc20(tokenAddr, bot.client)
 	if err != nil {
-		log.Fatal("cannot init token contract")
+		return 0, err
 	}
 
 	decimal, err := token.Decimals(&bind.CallOpts{})
 	if err != nil {
-		log.Fatal("cannot get token decimal")
+		return 0, err
 	}
 
-	return decimal
+	return decimal, nil
 }
 
-func (bot *Bot) getBalanceOf(tokenAddr common.Address, walletAddr common.Address) *big.Int {
+func (bot *Bot) getBalanceOf(tokenAddr common.Address, walletAddr common.Address) (*big.Int, error) {
 	token, err := erc20.NewErc20(tokenAddr, bot.client)
 	if err != nil {
-		log.Fatal("cannot init outToken contract")
+		return nil, err
 	}
 
 	balance, err := token.BalanceOf(&bind.CallOpts{}, walletAddr)
 	if err != nil {
-		log.Fatal("cannot init token contract")
+		return nil, err
 	}
 
-	return balance
+	return balance, nil
 }
+
+// func (bot *Bot) approve(amountIn *big.Int, transOpt *bind.TransactOpts) error {
+// 	token, err := erc20.NewErc20(bot.inTokenAddr, bot.client)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// allowance, err:= token.Allowance(&bind.CallOpts{},bot.userAddr, bot.routerAddr)
+// 	// if err!= nil {
+// 	// 	return err
+// 	// }
+
+// 	// if allowance.Cmp(amountIn)<0{
+
+// 	// }
+
+// 	// max := big.Ne(wInt1.1579209e77)
+
+// 	// tx := token.Approve(transOpt, bot.routerAddr, max)
+
+// }
 
 func (bot *Bot) getTransOpt(gasPrice float64, gasLimit uint, nonce uint64) *bind.TransactOpts {
 
@@ -118,7 +140,7 @@ func (bot *Bot) getTransOpt(gasPrice float64, gasLimit uint, nonce uint64) *bind
 	return auth
 }
 
-func (bot *Bot) swap(to common.Address, amount *big.Int, deadline *big.Int, isETH bool, transOpt *bind.TransactOpts) *types.Transaction {
+func (bot *Bot) swap(to common.Address, amount *big.Int, deadline *big.Int, isETH bool, transOpt *bind.TransactOpts) (*types.Transaction, error) {
 	router, err := routerV2.NewRouterV2(bot.routerAddr, bot.client)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -131,48 +153,48 @@ func (bot *Bot) swap(to common.Address, amount *big.Int, deadline *big.Int, isET
 		transOpt.Value = amount
 		tx, err = router.SwapExactETHForTokens(transOpt, big.NewInt(0), path, to, deadline)
 		if err != nil {
-			log.Fatal(err.Error())
+			return nil, err
 		}
 	} else {
 		tx, err = router.SwapExactTokensForTokens(transOpt, amount, big.NewInt(0), path, to, deadline)
 		if err != nil {
-			log.Fatal(err.Error())
+			return nil, err
 		}
 	}
-	return tx
+	return tx, nil
 }
 
-func (bot *Bot) getNonce() uint64 {
+func (bot *Bot) getNonce() (uint64, error) {
 	nonce, err := bot.client.PendingNonceAt(context.Background(), bot.userAddr)
 	if err != nil {
-		log.Fatal(err)
+		return 0, err
 	}
 
-	return nonce
+	return nonce, nil
 }
 
-func (bot *Bot) getTxReceipt(tx *types.Transaction) *types.Receipt {
+func (bot *Bot) getTxReceipt(tx *types.Transaction) (*types.Receipt, error) {
 	receipt, err := bot.client.TransactionReceipt(context.Background(), tx.Hash())
 	if err != nil {
-		log.Fatal(err.Error())
+		return nil, err
 	}
-	return receipt
+	return receipt, nil
 }
 
-func main() {
+func process(rpc string, privateKeyString string, routerV2AddrString string, factoryAddrString string, isETH bool, inTokenAddrString string, outTokenAddrString string, amountInString string, gasPriceString string) error {
 
-	fmt.Print("RPC endpoint: ")
-	rpc := inputHandler()
+	// fmt.Print("RPC endpoint: ")
+	// rpc := inputHandler()
 
 	client, err := ethclient.Dial(rpc)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	fmt.Println("we have a connection")
 
-	fmt.Print("Enter Your Private Key: ")
-	privateKeyString := inputHandler()
+	// fmt.Print("Enter Your Private Key: ")
+	// privateKeyString := inputHandler()
 
 	if strings.Contains(privateKeyString, "0x") {
 		privateKeyString = privateKeyString[2:]
@@ -181,42 +203,42 @@ func main() {
 	privateKey, err := crypto.HexToECDSA(privateKeyString)
 	if err != nil {
 		fmt.Println("invalid private key")
-		log.Fatal(err)
+		return err
 	}
 
-	fmt.Print("Router V2 Address: ")
-	routerV2AddrString := inputHandler()
+	// fmt.Print("Router V2 Address: ")
+	// routerV2AddrString := inputHandler()
 	routerAddr := common.HexToAddress(routerV2AddrString)
 
-	fmt.Print("Factory Address: ")
-	factoryAddrString := inputHandler()
+	// fmt.Print("Factory Address: ")
+	// factoryAddrString := inputHandler()
 	factoryAddr := common.HexToAddress(factoryAddrString)
 
-	var isETH = false
-	fmt.Print("is ETH?(Y/N): ")
-	isETHString := inputHandler()
-	if isETHString == "y" {
-		isETH = true
-	}
+	// var isETH = false
+	// fmt.Print("is ETH?(Y/N): ")
+	// isETHString := inputHandler()
+	// if isETHString == "y" {
+	// 	isETH = true
+	// }
 
-	var inTokenAddr common.Address
-	fmt.Print("inToken Address: ")
-	inTokenAddrString := inputHandler()
-	inTokenAddr = common.HexToAddress(inTokenAddrString)
+	// var inTokenAddr common.Address
+	// fmt.Print("inToken Address: ")
+	// inTokenAddrString := inputHandler()
+	inTokenAddr := common.HexToAddress(inTokenAddrString)
 
-	fmt.Print("outToken Address: ")
-	outTokenAddrString := inputHandler()
+	// fmt.Print("outToken Address: ")
+	// outTokenAddrString := inputHandler()
 	outTokenAddr := common.HexToAddress(outTokenAddrString)
 
-	fmt.Print("amount In: ")
-	amountInString := inputHandler()
+	// fmt.Print("amount In: ")
+	// amountInString := inputHandler()
 	amount, err := strconv.ParseFloat(amountInString, 64)
 	if err != nil {
 		log.Fatal("input amount error")
 	}
 
-	fmt.Print("gas price: ")
-	gasPriceString := inputHandler()
+	// fmt.Print("gas price: ")
+	// gasPriceString := inputHandler()
 	gasPrice, err := strconv.ParseFloat(gasPriceString, 64)
 	if err != nil {
 		log.Fatal("input amount error")
@@ -225,40 +247,66 @@ func main() {
 	bot := NewBot(client, privateKey, inTokenAddr, outTokenAddr, routerAddr, factoryAddr)
 
 	for {
-		pairAddr := bot.getPairAddr()
+		pairAddr, err := bot.getPairAddr()
+		if err != nil {
+			return err
+		}
 		if pairAddr == ZERO_ADDRESS {
 			fmt.Println(time.Now(), " pool not created yet!")
 			continue
 		} else {
 			fmt.Println("pool address is: ", pairAddr.Hex())
 			for {
-				poolBalance := bot.getBalanceOf(bot.inTokenAddr, pairAddr)
+				poolBalance, err := bot.getBalanceOf(bot.inTokenAddr, pairAddr)
+				if err != nil {
+					return err
+				}
 
 				if poolBalance.Cmp(big.NewInt(0)) > 0 {
-					nonce := bot.getNonce()
+					nonce, err := bot.getNonce()
+					if err != nil {
+						return err
+					}
 
 					var bigIntAmount *big.Int
 					if isETH {
 						amount *= 1000000000000000000
 						bigIntAmount = big.NewInt(int64(amount))
+
 					} else {
-						decimal := bot.getDecimal(bot.inTokenAddr)
+						decimal, err := bot.getDecimal(bot.inTokenAddr)
+						if err != nil {
+							return err
+						}
 						amount *= float64(decimal)
 						bigIntAmount = big.NewInt(int64(amount))
 					}
 
 					transOpt := bot.getTransOpt(gasPrice, 3000000, nonce)
-					tx := bot.swap(bot.userAddr, bigIntAmount, big.NewInt(99999999999), isETH, transOpt)
+					tx, err := bot.swap(bot.userAddr, bigIntAmount, big.NewInt(99999999999), isETH, transOpt)
+					if err != nil {
+						return err
+					}
 
-					receipt := bot.getTxReceipt(tx)
+					receipt, err := bot.getTxReceipt(tx)
+					if err != nil {
+						return err
+					}
 					fmt.Println(receipt.Status)
-					amountOut := bot.getBalanceOf(bot.outTokenAddr, bot.userAddr)
+					amountOut, err := bot.getBalanceOf(bot.outTokenAddr, bot.userAddr)
+					if err != nil {
+						return err
+					}
 					bitFloatAmountOut := new(big.Float).SetInt(amountOut)
-					outTokenDecimal := big.NewFloat(float64(bot.getDecimal(bot.outTokenAddr)))
+					decimal, err := bot.getDecimal(bot.outTokenAddr)
+					if err != nil {
+						return err
+					}
+					outTokenDecimal := big.NewFloat(float64(decimal))
 					bigAmountOut := new(big.Float).Quo(bitFloatAmountOut, outTokenDecimal)
 
 					fmt.Println("you get: ", bigAmountOut)
-					return
+					return nil
 				} else {
 					fmt.Println(time.Now(), "pool is still empty")
 				}
@@ -269,26 +317,44 @@ func main() {
 
 }
 
-func main2() {
-	var inTE, outTE *walk.TextEdit
+func main() {
+	a := app.New()
+	win := a.NewWindow("ICO BOT")
 
-	MainWindow{
-		Title:   "SCREAMO",
-		MinSize: Size{600, 400},
-		Layout:  VBox{},
-		Children: []Widget{
-			HSplitter{
-				Children: []Widget{
-					TextEdit{AssignTo: &inTE},
-					TextEdit{AssignTo: &outTE, ReadOnly: true},
-				},
-			},
-			PushButton{
-				Text: "SCREAM",
-				OnClicked: func() {
-					outTE.SetText(strings.ToUpper(inTE.Text()))
-				},
-			},
-		},
-	}.Run()
+	rpcEndPoint := widget.NewEntry()
+	privateKey := widget.NewEntry()
+	tokenInAddrString := widget.NewEntry()
+	tokenOutAddrString := widget.NewEntry()
+	amountInString := widget.NewEntry()
+	gasPriceString := widget.NewEntry()
+
+	win.SetContent(widget.NewVBox(
+		widget.NewLabel("rpc end point"),
+		rpcEndPoint,
+		widget.NewLabel("private Key"),
+		privateKey,
+		widget.NewLabel("token in address"),
+		tokenInAddrString,
+		widget.NewLabel("token out address"),
+		tokenOutAddrString,
+		widget.NewLabel("amount in"),
+		amountInString,
+		widget.NewLabel("gas price"),
+		gasPriceString,
+		widget.NewButton("Start", func() {
+			isETH := false
+			if strings.Compare(strings.ToLower(tokenInAddrString.Text), strings.ToLower("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c")) == 0 {
+				isETH = true
+			}
+			go process(rpcEndPoint.Text, privateKey.Text, "0x10ED43C718714eb63d5aA57B78B54704E256024E", "0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73", isETH, tokenInAddrString.Text, tokenOutAddrString.Text, amountInString.Text, gasPriceString.Text)
+			// if err != nil {
+			// 	fmt.Println(err.Error())
+			// }
+		}),
+		widget.NewButton("Quit", func() {
+			a.Quit()
+		}),
+	))
+	win.Resize(fyne.NewSize(640, 800))
+	win.ShowAndRun()
 }
