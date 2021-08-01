@@ -18,6 +18,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+
+	"github.com/lxn/walk"
+	. "github.com/lxn/walk/declarative"
 )
 
 var ZERO_ADDRESS = common.HexToAddress("0x0000000000000000000000000000000000000000")
@@ -158,7 +161,6 @@ func (bot *Bot) getTxReceipt(tx *types.Transaction) *types.Receipt {
 
 func main() {
 
-
 	fmt.Print("RPC endpoint: ")
 	rpc := inputHandler()
 
@@ -265,4 +267,28 @@ func main() {
 
 	}
 
+}
+
+func main2() {
+	var inTE, outTE *walk.TextEdit
+
+	MainWindow{
+		Title:   "SCREAMO",
+		MinSize: Size{600, 400},
+		Layout:  VBox{},
+		Children: []Widget{
+			HSplitter{
+				Children: []Widget{
+					TextEdit{AssignTo: &inTE},
+					TextEdit{AssignTo: &outTE, ReadOnly: true},
+				},
+			},
+			PushButton{
+				Text: "SCREAM",
+				OnClicked: func() {
+					outTE.SetText(strings.ToUpper(inTE.Text()))
+				},
+			},
+		},
+	}.Run()
 }
